@@ -16,6 +16,52 @@ const UPSTREAM_MODEL_ERROR_ORIGIN = 'model_provider';
 const UNKNOWN_UPSTREAM_MODEL_ERROR_TYPE = '_OTHER';
 const UPSTREAM_MODEL_ERROR_FALLBACK = 'The model provider could not complete this request.';
 
+/**
+ * Shamwari: refusals the Shamwari gateway makes on purpose, with the plain sentence a person
+ * should read (FORK.md). The OpenAI client keeps only the error code from the gateway's body,
+ * so without this the person sees `409 "scope_requires_local_inference"` and not why.
+ *
+ * The text is constant, never taken from the provider, so it is safe to show even when a content
+ * policy withholds provider text. Rule 1 is unchanged: the gateway still refuses; this only
+ * explains the refusal.
+ */
+const SHAMWARI_GATEWAY_REFUSALS: Readonly<Record<string, string>> = Object.freeze({
+  scope_requires_local_inference:
+    'Personal-layer data cannot be sent to an external inference provider. ' +
+    'This chat generates its answers in the cloud, so it cannot use your personal information. ' +
+    'Ask again without it, or use Shamwari Mind on your device.',
+});
+
+function readProperty(error: unknown, property: string): unknown {
+  if (error == null || typeof error !== 'object') {
+    return undefined;
+  }
+  try {
+    return Reflect.get(error, property);
+  } catch {
+    return undefined;
+  }
+}
+
+/** The plain sentence for a known gateway refusal, or undefined for anything else. */
+export function getShamwariGatewayRefusal(error: unknown): string | undefined {
+  const candidates = [readProperty(error, 'error'), readProperty(error, 'code')];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate in SHAMWARI_GATEWAY_REFUSALS) {
+      return SHAMWARI_GATEWAY_REFUSALS[candidate];
+    }
+  }
+  const message = readProperty(error, 'message');
+  if (typeof message === 'string') {
+    for (const code of Object.keys(SHAMWARI_GATEWAY_REFUSALS)) {
+      if (message.includes(code)) {
+        return SHAMWARI_GATEWAY_REFUSALS[code];
+      }
+    }
+  }
+  return undefined;
+}
+
 function safelyResolveLangChainError(error: unknown): string | undefined {
   try {
     return resolveLangChainError(error);
@@ -114,6 +160,12 @@ export function createTerminalRunErrorObserver({
           : undefined);
       if (classifiedError != null) {
         return classifiedError;
+      }
+
+      const shamwariRefusal =
+        getShamwariGatewayRefusal(upstreamModelError) ?? getShamwariGatewayRefusal(error);
+      if (shamwariRefusal != null) {
+        return shamwariRefusal;
       }
 
       /** Unclassified: the provider's own explanation is the only account of what happened, and a

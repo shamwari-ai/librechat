@@ -372,4 +372,55 @@ describe('terminal agent-run error logging', () => {
       errorType: '_OTHER',
     });
   });
+
+  /** Shamwari: the gateway's personal-scope refusal reads as a sentence, not a bare code. */
+  describe('Shamwari gateway refusals', () => {
+    const refusal = Object.assign(new Error('409 "scope_requires_local_inference"'), {
+      name: 'ConflictError',
+      status: 409,
+      error: 'scope_requires_local_inference',
+    });
+    const sentence = 'Personal-layer data cannot be sent to an external inference provider.';
+
+    it.each([true, false])(
+      'shows the plain sentence (protectionEnabled=%s)',
+      (protectionEnabled) => {
+        const observer = createTerminalRunErrorObserver({
+          logger: { error: jest.fn() },
+          source: '[Agent API]',
+          protectionEnabled,
+        });
+        observer.modelCallback.handleLLMError(refusal);
+
+        const shown = observer.getUserFacingError(
+          new Error('graph failed', { cause: refusal }),
+          () => 'fallback',
+        );
+
+        expect(shown).toContain(sentence);
+        expect(shown).not.toContain('scope_requires_local_inference');
+      },
+    );
+
+    it('leaves every other upstream error unchanged', () => {
+      const other = Object.assign(new Error('409 "something_else"'), {
+        name: 'ConflictError',
+        status: 409,
+        error: 'something_else',
+      });
+      const observer = createTerminalRunErrorObserver({
+        logger: { error: jest.fn() },
+        source: '[Agent API]',
+        protectionEnabled: true,
+      });
+      observer.modelCallback.handleLLMError(other);
+
+      expect(
+        observer.getUserFacingError(new Error('graph failed', { cause: other }), () => 'fallback'),
+      ).toBe(
+        'The model provider could not complete this request.\n' +
+          JSON.stringify({ type: 'upstream_model_error', status: 409 }),
+      );
+    });
+  });
 });
