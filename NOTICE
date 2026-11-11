@@ -1,0 +1,12 @@
+Shamwari fork of LibreChat
+
+LibreChat is licensed under the MIT License. See LICENSE in this repository.
+The MIT notice must be kept in every copy and every built image.
+
+Additions made in this fork (files and changes committed on the
+shamwari/main branch after the base commit e8f3be08623663d4ad7f7241e693c94469b63bb0)
+are licensed under the Apache License, Version 2.0, Copyright Bundu Foundation
+(Zimbabwe CLG), and are used commercially by Nyuchi Africa.
+
+This is a fork, not an endorsement: LibreChat and its authors are not affiliated
+with Bundu Foundation or Nyuchi Africa.
